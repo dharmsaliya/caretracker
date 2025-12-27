@@ -1,35 +1,53 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useEffect, useState } from 'react';
+import api from './api';
+import EquipmentForm from './components/EquipmentForm';
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [equipment, setEquipment] = useState([]);
+
+  const fetchEquipment = () => {
+    api.get('/equipment').then(res => setEquipment(res.data));
+  };
+
+  useEffect(() => {
+    fetchEquipment();
+  }, []);
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+    <div className="min-h-screen bg-slate-50 p-8">
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-3xl font-bold text-gray-800 mb-8">GearGuard Manager</h1>
+        
+        {/* The Form Component */}
+        <EquipmentForm onRefresh={fetchEquipment} />
+
+        {/* The List */}
+        <div className="bg-white shadow rounded-lg p-6">
+          <h2 className="text-xl font-semibold mb-4">Equipment Inventory</h2>
+          <table className="w-full text-left">
+            <thead>
+              <tr className="border-b">
+                <th className="p-2">Name</th>
+                <th className="p-2">Serial</th>
+                <th className="p-2">Team</th>
+                <th className="p-2">Location</th>
+              </tr>
+            </thead>
+            <tbody>
+              {equipment.map(item => (
+                <tr key={item.id} className="border-b hover:bg-gray-50">
+                  <td className="p-2">{item.name}</td>
+                  <td className="p-2 text-gray-500">{item.serialNumber}</td>
+                  <td className="p-2 text-blue-600">{item.maintenanceTeam?.name}</td>
+                  <td className="p-2">{item.location}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+    </div>
+  );
 }
 
-export default App
+export default App;
