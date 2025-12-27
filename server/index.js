@@ -17,9 +17,18 @@ app.get('/api/teams', async (req, res) => {
   res.json(teams);
 });
 
-// 2. Create New Equipment (THE MISSING ROUTE)
+// 2. Create New Equipment (UPDATED)
 app.post('/api/equipment', async (req, res) => {
-  const { name, serialNumber, location, maintenanceTeamId } = req.body;
+  // Now accepting all required fields
+  const { 
+    name, 
+    serialNumber, 
+    location, 
+    maintenanceTeamId, 
+    department, 
+    purchaseDate, 
+    warrantyEnd 
+  } = req.body;
 
   try {
     const newEquipment = await prisma.equipment.create({
@@ -27,8 +36,10 @@ app.post('/api/equipment', async (req, res) => {
         name,
         serialNumber,
         location,
-        // Schema requires purchaseDate, but form doesn't send it. Defaulting to now.
-        purchaseDate: new Date(), 
+        department, // Now saving department
+        // Parse dates correctly
+        purchaseDate: new Date(purchaseDate), 
+        warrantyEnd: warrantyEnd ? new Date(warrantyEnd) : null,
         status: 'OPERATIONAL',
         maintenanceTeamId: parseInt(maintenanceTeamId)
       }
@@ -88,19 +99,26 @@ app.get('/api/requests', async (req, res) => {
   res.json(requests);
 });
 
-// 6. Update Status (The Drag & Drop Logic)
+// 6. Update Status (UPDATED)
 app.patch('/api/requests/:id/status', async (req, res) => {
   const { id } = req.params;
-  const { status } = req.body; // "IN_PROGRESS", "REPAIRED", "SCRAP"
+  const { status, duration } = req.body; // Now accepting duration
 
   try {
-    // 1. Update the request status
+    const updateData = { status };
+
+    // Only update duration if it's provided (e.g., when moving to REPAIRED)
+    if (duration !== undefined) {
+      updateData.duration = parseInt(duration);
+    }
+
+    // 1. Update the request
     const request = await prisma.maintenanceRequest.update({
       where: { id: parseInt(id) },
-      data: { status }
+      data: updateData
     });
 
-    // 2. SMART AUTOMATION: If moved to Scrap, kill the machine
+    // 2. SCRAP Logic
     if (status === 'SCRAP') {
       await prisma.equipment.update({
         where: { id: request.equipmentId },

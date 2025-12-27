@@ -61,13 +61,16 @@ model MaintenanceRequest {
   id          Int      @id @default(autoincrement())
   title       String
   description String?
-  priority    String   @default("MEDIUM") // LOW, MEDIUM, HIGH
-  type        String   @default("CORRECTIVE") // CORRECTIVE or PREVENTIVE
+  priority    String   @default("MEDIUM") 
+  type        String   @default("CORRECTIVE") 
+  status      String   @default("NEW") 
   
-  // The Kanban Status (Critical Requirement)
-  status      String   @default("NEW") // NEW, IN_PROGRESS, REPAIRED, SCRAP
+  scheduledDate DateTime?
   
-  scheduledDate DateTime? // For Calendar View
+  // --- NEW FIELD ADDED HERE ---
+  duration    Int?     // Duration in hours
+  // ----------------------------
+
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -75,6 +78,6 @@ model MaintenanceRequest {
   equipmentId   Int
   equipment     Equipment @relation(fields: [equipmentId], references: [id])
   
-  assignedToId  Int?      // The technician fixing it
+  assignedToId  Int?
   assignedTo    User?     @relation(fields: [assignedToId], references: [id])
 }
