@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
-import api from '../api';
+import api, { fetchRequests, assignRequest } from '../api';
 
 const columns = {
   NEW: { id: 'NEW', title: 'To Do', color: 'bg-gray-100' },
@@ -12,7 +12,13 @@ const columns = {
 export default function KanbanBoard() {
   const [requests, setRequests] = useState([]);
   
-  // Modal State for "Report Breakdown"
+  // --- NEW: Filter & Assignment State ---
+  const [teams, setTeams] = useState([]);
+  const [selectedTeam, setSelectedTeam] = useState('');
+  // MOCK USER for "Assign to Me" (In real app, get from Auth)
+  const [currentUser, setCurrentUser] = useState({ id: 1, name: "Test Tech" }); 
+
+  // --- EXISTING: Report Breakdown State ---
   const [showModal, setShowModal] = useState(false);
   const [equipmentList, setEquipmentList] = useState([]);
   const [breakdownData, setBreakdownData] = useState({
@@ -21,18 +27,29 @@ export default function KanbanBoard() {
     priority: 'MEDIUM'
   });
 
-  // 1. Fetch Data on Load
+  // 1. Fetch Data
   useEffect(() => {
-    fetchRequests();
-    fetchEquipment();
-  }, []);
+    loadData();
+    fetchTeams();
+    fetchEquipment(); // Needed for the Breakdown form
+  }, [selectedTeam]); // Reload requests when filter changes
 
-  const fetchRequests = async () => {
+  const loadData = async () => {
     try {
-      const res = await api.get('/requests');
+      // Use the new API helper that handles the ?teamId param
+      const res = await fetchRequests(selectedTeam);
       setRequests(res.data);
     } catch (err) {
       console.error("Failed to fetch requests", err);
+    }
+  };
+
+  const fetchTeams = async () => {
+    try {
+      const res = await api.get('/teams');
+      setTeams(res.data);
+    } catch (err) {
+      console.error("Failed to fetch teams");
     }
   };
 
@@ -45,18 +62,16 @@ export default function KanbanBoard() {
     }
   };
 
-  // 2. Handle the Drag Event
+  // 2. Handle Drag & Drop (Existing Logic)
   const onDragEnd = async (result) => {
-    if (!result.destination) return; 
-    
+    if (!result.destination) return;
     const { draggableId, destination } = result;
-    const newStatus = destination.droppableId; 
+    const newStatus = destination.droppableId;
     let duration = null;
 
-    // Prompt for hours if moving to REPAIRED
     if (newStatus === 'REPAIRED') {
       const input = window.prompt("How many hours did this repair take?");
-      if (input === null) return; 
+      if (input === null) return;
       duration = parseFloat(input) || 0;
     }
 
@@ -66,17 +81,17 @@ export default function KanbanBoard() {
     );
     setRequests(updatedRequests);
 
-    // Call API
     try {
       const payload = { status: newStatus };
       if (duration !== null) payload.duration = duration;
       await api.patch(`/requests/${draggableId}/status`, payload);
     } catch (err) {
       console.error("Failed to update status", err);
-      fetchRequests();
+      loadData();
     }
   };
 
+  // 3. Handle Breakdown Submit (Existing Logic)
   const handleBreakdownSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -87,9 +102,19 @@ export default function KanbanBoard() {
       alert('Breakdown Reported!');
       setShowModal(false);
       setBreakdownData({ title: '', equipmentId: '', priority: 'MEDIUM' });
-      fetchRequests();
+      loadData(); // Refresh board
     } catch (err) {
       alert('Error reporting breakdown');
+    }
+  };
+
+  // 4. Handle Assign To Me (New Logic)
+  const handleAssignToMe = async (requestId) => {
+    try {
+      await assignRequest(requestId, currentUser.id);
+      loadData(); // Refresh to show avatar
+    } catch (err) {
+      alert("Failed to assign ticket");
     }
   };
 
@@ -99,12 +124,26 @@ export default function KanbanBoard() {
     <div className="p-6 relative">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold text-gray-800">Maintenance Board</h2>
-        <button 
-          onClick={() => setShowModal(true)}
-          className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded shadow font-bold flex items-center gap-2"
-        >
-          <span>🚨 Report Breakdown</span>
-        </button>
+        
+        <div className="flex items-center gap-4">
+          {/* TEAM FILTER */}
+          <select 
+            className="p-2 border rounded"
+            value={selectedTeam}
+            onChange={(e) => setSelectedTeam(e.target.value)}
+          >
+            <option value="">All Teams</option>
+            {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+
+          {/* REPORT BREAKDOWN BUTTON */}
+          <button 
+            onClick={() => setShowModal(true)}
+            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded shadow font-bold flex items-center gap-2"
+          >
+            <span>🚨 Report Breakdown</span>
+          </button>
+        </div>
       </div>
       
       <DragDropContext onDragEnd={onDragEnd}>
@@ -125,15 +164,15 @@ export default function KanbanBoard() {
                   </h3>
                   
                   <div className="flex-1 space-y-3">
-                    {getRequestsByStatus(col.id).map((req, index) => (
-                      <Draggable key={req.id} draggableId={String(req.id)} index={index}>
-                        {(provided) => {
-                          // --- NEW LOGIC: Check if Overdue ---
-                          const isOverdue = req.scheduledDate && 
-                                            new Date(req.scheduledDate) < new Date() && 
-                                            req.status !== 'REPAIRED';
+                    {getRequestsByStatus(col.id).map((req, index) => {
+                      // Check for Overdue
+                      const isOverdue = req.scheduledDate && 
+                                        new Date(req.scheduledDate) < new Date() && 
+                                        req.status !== 'REPAIRED';
 
-                          return (
+                      return (
+                        <Draggable key={req.id} draggableId={String(req.id)} index={index}>
+                          {(provided) => (
                             <div
                               ref={provided.innerRef}
                               {...provided.draggableProps}
@@ -142,7 +181,7 @@ export default function KanbanBoard() {
                                 ${isOverdue ? 'border-red-500 border-l-4' : 'border-gray-200'}
                               `}
                             >
-                              {/* OVERDUE BADGE */}
+                              {/* Overdue Badge */}
                               {isOverdue && (
                                 <div className="bg-red-100 text-red-700 text-xs font-bold px-2 py-1 mb-2 inline-block rounded">
                                   ! Overdue
@@ -162,8 +201,8 @@ export default function KanbanBoard() {
                                   {req.priority}
                                 </span>
 
-                                {/* --- NEW: AVATAR DISPLAY --- */}
-                                {req.assignedTo && (
+                                {/* ASSIGNMENT LOGIC */}
+                                {req.assignedTo ? (
                                   <div className="flex items-center gap-2" title={req.assignedTo.name}>
                                     {req.assignedTo.avatarUrl ? (
                                       <img 
@@ -177,13 +216,20 @@ export default function KanbanBoard() {
                                       </div>
                                     )}
                                   </div>
+                                ) : (
+                                  <button 
+                                    onClick={() => handleAssignToMe(req.id)}
+                                    className="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700"
+                                  >
+                                    Assign to Me
+                                  </button>
                                 )}
                               </div>
                             </div>
-                          );
-                        }}
-                      </Draggable>
-                    ))}
+                          )}
+                        </Draggable>
+                      );
+                    })}
                     {provided.placeholder}
                   </div>
                 </div>
@@ -193,7 +239,7 @@ export default function KanbanBoard() {
         </div>
       </DragDropContext>
 
-      {/* Breakdown Modal */}
+      {/* BREAKDOWN MODAL */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg w-full max-w-md p-6 shadow-xl">
