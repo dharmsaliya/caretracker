@@ -117,3 +117,34 @@ app.patch('/api/requests/:id/status', async (req, res) => {
     res.status(400).json({ error: error.message });
   }
 });
+
+// 8. Get Dashboard Stats (Bonus Feature)
+app.get('/api/stats', async (req, res) => {
+  try {
+    // Fetch all requests with their team info
+    const requests = await prisma.maintenanceRequest.findMany({
+      include: {
+        equipment: {
+          include: { maintenanceTeam: true }
+        }
+      }
+    });
+
+    // Calculate counts manually
+    const stats = {};
+    requests.forEach(req => {
+      const teamName = req.equipment?.maintenanceTeam?.name || "Unassigned";
+      stats[teamName] = (stats[teamName] || 0) + 1;
+    });
+
+    // Convert to array for the Chart: [{ name: 'Mechanics', value: 5 }]
+    const chartData = Object.keys(stats).map(key => ({
+      name: key,
+      value: stats[key]
+    }));
+
+    res.json(chartData);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
