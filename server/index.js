@@ -1,3 +1,4 @@
+// server/index.js
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const cors = require('cors');
@@ -16,7 +17,30 @@ app.get('/api/teams', async (req, res) => {
   res.json(teams);
 });
 
-// 3. Get All Equipment (UPDATED with Smart Counts)
+// 2. Create New Equipment (THE MISSING ROUTE)
+app.post('/api/equipment', async (req, res) => {
+  const { name, serialNumber, location, maintenanceTeamId } = req.body;
+
+  try {
+    const newEquipment = await prisma.equipment.create({
+      data: {
+        name,
+        serialNumber,
+        location,
+        // Schema requires purchaseDate, but form doesn't send it. Defaulting to now.
+        purchaseDate: new Date(), 
+        status: 'OPERATIONAL',
+        maintenanceTeamId: parseInt(maintenanceTeamId)
+      }
+    });
+    res.json(newEquipment);
+  } catch (error) {
+    console.error("Error creating equipment:", error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// 3. Get All Equipment (With Smart Counts)
 app.get('/api/equipment', async (req, res) => {
   const equipment = await prisma.equipment.findMany({
     include: { 
@@ -30,36 +54,8 @@ app.get('/api/equipment', async (req, res) => {
   res.json(equipment);
 });
 
-// 7. Get History for Specific Equipment (When button is clicked)
-app.get('/api/equipment/:id/requests', async (req, res) => {
-  const { id } = req.params;
-  const requests = await prisma.maintenanceRequest.findMany({
-    where: { equipmentId: parseInt(id) },
-    orderBy: { createdAt: 'desc' }
-  });
-  res.json(requests);
-});
-
-// 3. Get All Equipment (For the list view)
-app.get('/api/equipment', async (req, res) => {
-  const equipment = await prisma.equipment.findMany({
-    include: { maintenanceTeam: true } // Join table to show team name
-  });
-  res.json(equipment);
-});
-
-const PORT = 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-});
-
-// ... previous code ...
-
-// --- PHASE 2: KANBAN APIS ---
-
-// 4. Create a Maintenance Request (UPDATED for Calendar)
+// 4. Create a Maintenance Request
 app.post('/api/requests', async (req, res) => {
-  // Added 'scheduledDate' to the destructured variables
   const { title, description, type, priority, equipmentId, scheduledDate } = req.body;
 
   try {
@@ -118,6 +114,16 @@ app.patch('/api/requests/:id/status', async (req, res) => {
   }
 });
 
+// 7. Get History for Specific Equipment (When button is clicked)
+app.get('/api/equipment/:id/requests', async (req, res) => {
+  const { id } = req.params;
+  const requests = await prisma.maintenanceRequest.findMany({
+    where: { equipmentId: parseInt(id) },
+    orderBy: { createdAt: 'desc' }
+  });
+  res.json(requests);
+});
+
 // 8. Get Dashboard Stats (Bonus Feature)
 app.get('/api/stats', async (req, res) => {
   try {
@@ -147,4 +153,9 @@ app.get('/api/stats', async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
+});
+
+const PORT = 3000;
+app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
 });
