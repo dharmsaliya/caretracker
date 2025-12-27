@@ -16,29 +16,28 @@ app.get('/api/teams', async (req, res) => {
   res.json(teams);
 });
 
-// 2. Create Equipment
-app.post('/api/equipment', async (req, res) => {
-  const { name, serialNumber, location, maintenanceTeamId } = req.body;
-  try {
-    // Logic: Find a technician in that team to assign as default
-    const defaultTech = await prisma.user.findFirst({
-      where: { teamId: parseInt(maintenanceTeamId) }
-    });
-
-    const newEquipment = await prisma.equipment.create({
-      data: {
-        name,
-        serialNumber,
-        location,
-        purchaseDate: new Date(), // Default to now
-        maintenanceTeamId: parseInt(maintenanceTeamId),
-        ownerId: defaultTech ? defaultTech.id : null // Auto-assign tech logic
+// 3. Get All Equipment (UPDATED with Smart Counts)
+app.get('/api/equipment', async (req, res) => {
+  const equipment = await prisma.equipment.findMany({
+    include: { 
+      maintenanceTeam: true,
+      // This adds a 'requestCount' field automatically!
+      _count: {
+        select: { requests: true }
       }
-    });
-    res.json(newEquipment);
-  } catch (error) {
-    res.status(400).json({ error: error.message });
-  }
+    }
+  });
+  res.json(equipment);
+});
+
+// 7. Get History for Specific Equipment (When button is clicked)
+app.get('/api/equipment/:id/requests', async (req, res) => {
+  const { id } = req.params;
+  const requests = await prisma.maintenanceRequest.findMany({
+    where: { equipmentId: parseInt(id) },
+    orderBy: { createdAt: 'desc' }
+  });
+  res.json(requests);
 });
 
 // 3. Get All Equipment (For the list view)
