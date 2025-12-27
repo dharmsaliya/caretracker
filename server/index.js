@@ -88,12 +88,19 @@ app.post('/api/requests', async (req, res) => {
   }
 });
 
-// 5. Get All Requests (For the Kanban Board)
+// 5. Get All Requests (Updated for Team Filtering)
 app.get('/api/requests', async (req, res) => {
+  const { teamId } = req.query; // Get teamId from URL query params
+
+  const whereClause = teamId 
+    ? { equipment: { maintenanceTeamId: parseInt(teamId) } } 
+    : {};
+
   const requests = await prisma.maintenanceRequest.findMany({
+    where: whereClause,
     include: {
-      equipment: true, // We need the machine name on the card
-      assignedTo: true // We need the technician avatar
+      equipment: true, 
+      assignedTo: true 
     }
   });
   res.json(requests);
@@ -170,6 +177,26 @@ app.get('/api/stats', async (req, res) => {
     res.json(chartData);
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// 9. Assign Ticket to User (NEW FEATURE)
+app.patch('/api/requests/:id/assign', async (req, res) => {
+  const { id } = req.params;
+  const { userId } = req.body;
+
+  try {
+    const request = await prisma.maintenanceRequest.update({
+      where: { id: parseInt(id) },
+      data: { 
+        assignedToId: parseInt(userId),
+        status: 'IN_PROGRESS' // Auto-move to In Progress when picked up (Optional but good UX)
+      },
+      include: { assignedTo: true } // Return updated user info
+    });
+    res.json(request);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
   }
 });
 
