@@ -7,6 +7,9 @@ export default function EquipmentForm({ onRefresh }) {
     name: '', 
     serialNumber: '', 
     location: '', 
+    department: '',    // NEW FIELD
+    purchaseDate: '',  // NEW FIELD
+    warrantyEnd: '',   // NEW FIELD
     maintenanceTeamId: ''
   });
 
@@ -18,12 +21,32 @@ export default function EquipmentForm({ onRefresh }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await api.post('/equipment', formData);
+      // Create a copy of data to send (ensure date strings are valid or null)
+      const payload = {
+        ...formData,
+        // Ensure empty strings for dates are sent as null if backend requires it, 
+        // or keep as empty string if your backend handles it. 
+        // Based on typical Prisma, dates are ISO-8601 strings.
+        purchaseDate: formData.purchaseDate ? new Date(formData.purchaseDate).toISOString() : null,
+        warrantyEnd: formData.warrantyEnd ? new Date(formData.warrantyEnd).toISOString() : null,
+      };
+
+      await api.post('/equipment', payload);
       alert('Equipment Added!');
+      
       // Reset form
-      setFormData({ name: '', serialNumber: '', location: '', maintenanceTeamId: '' });
+      setFormData({ 
+        name: '', 
+        serialNumber: '', 
+        location: '', 
+        department: '', 
+        purchaseDate: '', 
+        warrantyEnd: '', 
+        maintenanceTeamId: '' 
+      });
       onRefresh(); // Reload the list below
     } catch (err) {
+      console.error(err);
       alert('Error adding equipment');
     }
   };
@@ -53,6 +76,35 @@ export default function EquipmentForm({ onRefresh }) {
           onChange={e => setFormData({...formData, location: e.target.value})}
           required
         />
+        <input
+          placeholder="Department"
+          className="p-2 border rounded"
+          value={formData.department}
+          onChange={e => setFormData({...formData, department: e.target.value})}
+        />
+        
+        {/* NEW DATE FIELDS */}
+        <div className="flex flex-col">
+          <label className="text-xs text-gray-500 mb-1">Purchase Date</label>
+          <input
+            type="date"
+            className="p-2 border rounded"
+            value={formData.purchaseDate}
+            onChange={e => setFormData({...formData, purchaseDate: e.target.value})}
+            required
+          />
+        </div>
+
+        <div className="flex flex-col">
+          <label className="text-xs text-gray-500 mb-1">Warranty End</label>
+          <input
+            type="date"
+            className="p-2 border rounded"
+            value={formData.warrantyEnd}
+            onChange={e => setFormData({...formData, warrantyEnd: e.target.value})}
+          />
+        </div>
+
         <select
           className="p-2 border rounded"
           value={formData.maintenanceTeamId}
@@ -64,6 +116,7 @@ export default function EquipmentForm({ onRefresh }) {
             <option key={team.id} value={team.id}>{team.name}</option>
           ))}
         </select>
+        
         <button type="submit" className="col-span-2 bg-blue-600 text-white p-2 rounded hover:bg-blue-700">
           Save Equipment
         </button>
