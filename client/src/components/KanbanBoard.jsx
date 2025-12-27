@@ -11,10 +11,20 @@ const columns = {
 
 export default function KanbanBoard() {
   const [requests, setRequests] = useState([]);
+  
+  // NEW: State for "Report Breakdown" Modal
+  const [showModal, setShowModal] = useState(false);
+  const [equipmentList, setEquipmentList] = useState([]);
+  const [breakdownData, setBreakdownData] = useState({
+    title: '',
+    equipmentId: '',
+    priority: 'MEDIUM'
+  });
 
   // 1. Fetch Data on Load
   useEffect(() => {
     fetchRequests();
+    fetchEquipment(); // Fetch equipment for the dropdown in the modal
   }, []);
 
   const fetchRequests = async () => {
@@ -26,14 +36,31 @@ export default function KanbanBoard() {
     }
   };
 
+  const fetchEquipment = async () => {
+    try {
+      const res = await api.get('/equipment');
+      setEquipmentList(res.data);
+    } catch (err) {
+      console.error("Failed to fetch equipment", err);
+    }
+  };
+
   // 2. Handle the Drag Event
   const onDragEnd = async (result) => {
     if (!result.destination) return; // Dropped outside
     
     const { draggableId, destination } = result;
     const newStatus = destination.droppableId; // e.g., "IN_PROGRESS"
+    let duration = null;
 
-    // Optimistic Update (Update UI immediately before API finishes)
+    // --- REQUIREMENT: Prompt for hours if moving to REPAIRED ---
+    if (newStatus === 'REPAIRED') {
+      const input = window.prompt("How many hours did this repair take?");
+      if (input === null) return; // User cancelled the prompt, cancel the drag
+      duration = parseFloat(input) || 0;
+    }
+
+    // Optimistic Update (Update UI immediately)
     const updatedRequests = requests.map(req => 
       req.id === parseInt(draggableId) ? { ...req, status: newStatus } : req
     );
@@ -41,10 +68,31 @@ export default function KanbanBoard() {
 
     // Call API to save change
     try {
-      await api.patch(`/requests/${draggableId}/status`, { status: newStatus });
+      const payload = { status: newStatus };
+      if (duration !== null) payload.duration = duration;
+
+      await api.patch(`/requests/${draggableId}/status`, payload);
     } catch (err) {
       console.error("Failed to update status", err);
       fetchRequests(); // Revert on error
+    }
+  };
+
+  // 3. Handle New Breakdown Report Submit
+  const handleBreakdownSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await api.post('/requests', {
+        ...breakdownData,
+        type: 'CORRECTIVE' // Hardcoded as per instructions
+      });
+      alert('Breakdown Reported!');
+      setShowModal(false);
+      setBreakdownData({ title: '', equipmentId: '', priority: 'MEDIUM' });
+      fetchRequests(); // Refresh board
+    } catch (err) {
+      console.error("Failed to report breakdown", err);
+      alert('Error reporting breakdown');
     }
   };
 
@@ -52,8 +100,18 @@ export default function KanbanBoard() {
   const getRequestsByStatus = (status) => requests.filter(r => r.status === status);
 
   return (
-    <div className="p-6">
-      <h2 className="text-2xl font-bold mb-6 text-gray-800">Maintenance Board</h2>
+    <div className="p-6 relative">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-bold text-gray-800">Maintenance Board</h2>
+        
+        {/* NEW: Report Breakdown Button */}
+        <button 
+          onClick={() => setShowModal(true)}
+          className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded shadow font-bold flex items-center gap-2"
+        >
+          <span>🚨 Report Breakdown</span>
+        </button>
+      </div>
       
       {/* The Drag & Drop Context Area */}
       <DragDropContext onDragEnd={onDragEnd}>
@@ -108,6 +166,72 @@ export default function KanbanBoard() {
           ))}
         </div>
       </DragDropContext>
+
+      {/* NEW: Breakdown Modal */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg w-full max-w-md p-6 shadow-xl">
+            <h3 className="text-xl font-bold mb-4 text-red-700">Report Breakdown</h3>
+            <form onSubmit={handleBreakdownSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-bold text-gray-700">Title</label>
+                <input 
+                  type="text" 
+                  placeholder="e.g. Screen Broken"
+                  className="w-full p-2 border rounded mt-1"
+                  value={breakdownData.title}
+                  onChange={e => setBreakdownData({...breakdownData, title: e.target.value})}
+                  required 
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-bold text-gray-700">Equipment</label>
+                <select 
+                  className="w-full p-2 border rounded mt-1"
+                  value={breakdownData.equipmentId}
+                  onChange={e => setBreakdownData({...breakdownData, equipmentId: e.target.value})}
+                  required
+                >
+                  <option value="">Select Equipment...</option>
+                  {equipmentList.map(eq => (
+                    <option key={eq.id} value={eq.id}>{eq.name} ({eq.serialNumber})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-700">Priority</label>
+                <select 
+                  className="w-full p-2 border rounded mt-1"
+                  value={breakdownData.priority}
+                  onChange={e => setBreakdownData({...breakdownData, priority: e.target.value})}
+                >
+                  <option value="LOW">Low</option>
+                  <option value="MEDIUM">Medium</option>
+                  <option value="HIGH">High</option>
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-2 mt-6">
+                <button 
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                >
+                  Submit Report
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
