@@ -1,0 +1,80 @@
+// server/prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Users (Technicians & Managers)
+model User {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  role      String   @default("TECHNICIAN") // "ADMIN" or "TECHNICIAN"
+  avatarUrl String?  // For the avatar requirement on Kanban cards
+  
+  // Relations
+  teamId    Int?
+  team      Team?    @relation(fields: [teamId], references: [id])
+  
+  assignedRequests MaintenanceRequest[]
+  ownedEquipment   Equipment[]          @relation("EquipmentOwner") // "Person name" who owns the laptop
+}
+
+// Maintenance Teams (e.g., "Mechanics", "IT Support")
+model Team {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  
+  // Relations
+  members   User[]
+  equipment Equipment[] // Equipment managed by this team
+}
+
+// The Assets (Machines, Vehicles)
+model Equipment {
+  id             Int      @id @default(autoincrement())
+  name           String
+  serialNumber   String   @unique
+  location       String
+  department     String?  // e.g., "Production"
+  purchaseDate   DateTime
+  warrantyEnd    DateTime?
+  status         String   @default("OPERATIONAL") // OPERATIONAL, UNUSABLE (Scrap logic)
+  
+  // Relations
+  maintenanceTeamId Int
+  maintenanceTeam   Team    @relation(fields: [maintenanceTeamId], references: [id])
+  
+  ownerId           Int?    // The employee who uses it
+  owner             User?   @relation("EquipmentOwner", fields: [ownerId], references: [id])
+
+  requests          MaintenanceRequest[]
+}
+
+// The Work Orders
+model MaintenanceRequest {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String?
+  priority    String   @default("MEDIUM") // LOW, MEDIUM, HIGH
+  type        String   @default("CORRECTIVE") // CORRECTIVE or PREVENTIVE
+  
+  // The Kanban Status (Critical Requirement)
+  status      String   @default("NEW") // NEW, IN_PROGRESS, REPAIRED, SCRAP
+  
+  scheduledDate DateTime? // For Calendar View
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  equipmentId   Int
+  equipment     Equipment @relation(fields: [equipmentId], references: [id])
+  
+  assignedToId  Int?      // The technician fixing it
+  assignedTo    User?     @relation(fields: [assignedToId], references: [id])
+}
