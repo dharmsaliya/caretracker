@@ -20,46 +20,65 @@ const localizer = dateFnsLocalizer({
 
 export default function MaintenanceCalendar() {
   const [events, setEvents] = useState([]);
+  const [equipmentList, setEquipmentList] = useState([]);
+  
+  // Modal State
+  const [showModal, setShowModal] = useState(false);
+  const [selectedSlot, setSelectedSlot] = useState(null);
+  const [formData, setFormData] = useState({ title: '', equipmentId: '' });
 
   useEffect(() => {
     fetchEvents();
+    fetchEquipment();
   }, []);
 
   const fetchEvents = async () => {
     try {
       const res = await api.get('/requests');
-      // Filter for PREVENTIVE and map to Calendar format
       const calendarEvents = res.data
         .filter(req => req.type === 'PREVENTIVE' && req.scheduledDate)
         .map(req => ({
-          title: `${req.title} (${req.equipment?.name || 'Unknown'})`,
+          title: `${req.title} - ${req.equipment?.name || 'Unknown'}`,
           start: new Date(req.scheduledDate),
           end: new Date(req.scheduledDate),
-          allDay: true,
-          resource: req
+          allDay: true
         }));
       setEvents(calendarEvents);
     } catch (err) {
-      console.error("Error fetching events", err);
+      console.error(err);
     }
   };
 
-  const handleSelectSlot = async ({ start }) => {
-    const title = prompt("Enter Preventive Maintenance Title:");
-    if (!title) return;
+  const fetchEquipment = async () => {
+    try {
+      const res = await api.get('/equipment');
+      setEquipmentList(res.data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
-    // Hardcoding Equipment ID 1 for speed - In real app, use a modal
+  const handleSelectSlot = ({ start }) => {
+    setSelectedSlot(start);
+    setShowModal(true); // Open the modal instead of prompt
+  };
+
+  const handleSave = async () => {
+    if (!formData.title || !formData.equipmentId) return alert("Please fill all fields");
+
     try {
       await api.post('/requests', {
-        title,
+        title: formData.title,
         description: "Scheduled via Calendar",
         type: "PREVENTIVE",
         priority: "MEDIUM",
-        equipmentId: 1, // Defaulting to first equipment
-        scheduledDate: start
+        equipmentId: parseInt(formData.equipmentId), // Ensure ID is an integer
+        scheduledDate: selectedSlot
       });
-      alert("Scheduled!");
-      fetchEvents(); // Refresh
+      
+      setShowModal(false);
+      setFormData({ title: '', equipmentId: '' });
+      fetchEvents(); // Refresh calendar
     } catch (err) {
       alert("Error scheduling");
       console.error(err);
@@ -67,8 +86,8 @@ export default function MaintenanceCalendar() {
   };
 
   return (
-    <div className="h-[600px] bg-white p-4 shadow rounded-lg">
-      <h2 className="text-2xl font-bold mb-4">Preventive Maintenance Schedule</h2>
+    <div className="h-[600px] bg-white p-4 shadow rounded-lg relative">
+      <h2 className="text-2xl font-bold mb-4">Preventive Schedule</h2>
       <Calendar
         localizer={localizer}
         events={events}
@@ -77,10 +96,40 @@ export default function MaintenanceCalendar() {
         style={{ height: 500 }}
         selectable
         onSelectSlot={handleSelectSlot}
-        eventPropGetter={() => ({
-          style: { backgroundColor: '#3b82f6', color: 'white' }
-        })}
       />
+
+      {/* CUSTOM MODAL FOR SCHEDULING */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded shadow-xl w-96">
+            <h3 className="text-xl font-bold mb-4">Schedule Maintenance</h3>
+            <p className="text-gray-600 mb-4">Date: {selectedSlot?.toDateString()}</p>
+            
+            <input
+              className="w-full border p-2 mb-3 rounded"
+              placeholder="Task Title (e.g. Oil Change)"
+              value={formData.title}
+              onChange={e => setFormData({...formData, title: e.target.value})}
+            />
+            
+            <select
+              className="w-full border p-2 mb-4 rounded"
+              value={formData.equipmentId}
+              onChange={e => setFormData({...formData, equipmentId: e.target.value})}
+            >
+              <option value="">Select Equipment...</option>
+              {equipmentList.map(eq => (
+                <option key={eq.id} value={eq.id}>{eq.name}</option>
+              ))}
+            </select>
+            
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setShowModal(false)} className="px-4 py-2 text-gray-600">Cancel</button>
+              <button onClick={handleSave} className="px-4 py-2 bg-blue-600 text-white rounded">Save</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
