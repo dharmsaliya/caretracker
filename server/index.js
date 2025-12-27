@@ -58,18 +58,22 @@ app.listen(PORT, () => {
 
 // --- PHASE 2: KANBAN APIS ---
 
-// 4. Create a Maintenance Request
+// 4. Create a Maintenance Request (UPDATED for Calendar)
 app.post('/api/requests', async (req, res) => {
-  const { title, description, type, priority, equipmentId } = req.body;
+  // Added 'scheduledDate' to the destructured variables
+  const { title, description, type, priority, equipmentId, scheduledDate } = req.body;
+
   try {
     const newRequest = await prisma.maintenanceRequest.create({
       data: {
         title,
         description,
         type,      // "CORRECTIVE" or "PREVENTIVE"
-        priority,  // "HIGH", "MEDIUM", "LOW"
+        priority,  
         status: "NEW", 
         equipmentId: parseInt(equipmentId),
+        // Convert string date to Date object if it exists
+        scheduledDate: scheduledDate ? new Date(scheduledDate) : null
       }
     });
     res.json(newRequest);
