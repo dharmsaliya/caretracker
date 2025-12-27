@@ -3,6 +3,7 @@ import api from './api';
 import EquipmentForm from './components/EquipmentForm';
 import KanbanBoard from './components/KanbanBoard';
 import MaintenanceCalendar from './components/MaintenanceCalendar';
+import Dashboard from './components/Dashboard';
 
 function App() {
   const [view, setView] = useState('board'); // 'board', 'list', 'calendar'
@@ -46,6 +47,7 @@ function App() {
           <button onClick={() => setView('list')} className="text-blue-600 hover:underline">Equipment</button>
           <button onClick={() => setView('board')} className="text-blue-600 hover:underline">Kanban Board</button>
           <button onClick={() => setView('calendar')} className="text-blue-600 hover:underline">Calendar</button>
+          <button onClick={() => setView('dashboard')} className="text-blue-600 hover:underline">Dashboard</button>
         </div>
       </nav>
 
@@ -107,7 +109,10 @@ function App() {
 
         {/* VIEW 3: CALENDAR */}
         {view === 'calendar' && <MaintenanceCalendar />}
+
+        {view === 'dashboard' && <Dashboard />}
       </div>
+      
 
       {/* --- HISTORY MODAL (ALWAYS RENDERED BUT HIDDEN) --- */}
       {showModal && (
